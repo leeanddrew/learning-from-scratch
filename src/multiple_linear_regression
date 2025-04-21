@@ -1,0 +1,33 @@
+import pandas as pd
+import numpy as np
+
+
+if __name__ == "__main__":
+    advertising=pd.read_csv("../datasets/Advertising.csv",index_col=0)
+
+    X=advertising.drop('sales',axis=1)
+    beta_0=np.ones(X.shape[0]).reshape(-1,1) #adds on intercept
+    X=np.concatenate((beta_0,X),axis=1)
+    y=advertising['sales'].values.reshape(-1,1)
+
+    beta=np.linalg.inv(X.T@X)@X.T@y
+
+    y_hat=(X@beta).ravel()
+    y_bar=y.mean()
+    RSS=np.sum((y.ravel()-y_hat)**2)
+    TSS=np.sum((y.ravel()-y_bar)**2)
+    R_squared=1-(RSS/TSS)
+
+    print("----------------------------------------")
+    print("Beta estimates from scratch:",beta.ravel())
+    print("R_squared from scratch:",R_squared)
+
+    from sklearn.linear_model import LinearRegression
+    lin_reg=LinearRegression()
+    X=advertising.drop('sales',axis=1).values
+    lin_reg.fit(X,y)
+
+    print("----------------------------------------")
+    print("beta from sklearn:",np.concatenate([lin_reg.intercept_.ravel(),lin_reg.coef_.ravel()]))
+    print("R_squared from sklearn:",lin_reg.score(X,y))
+    print("----------------------------------------")
