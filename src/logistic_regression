@@ -1,6 +1,57 @@
 import pandas as pd
 import numpy as np
 from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import accuracy_score
+
+def softmax(logits):
+    logits_stable = logits - np.max(logits, axis=1, keepdims=True)  # stability trick
+    exp_logits = np.exp(logits_stable)
+    return exp_logits / np.sum(exp_logits, axis=1, keepdims=True)
+
+def one_hot(y, K):
+    N = y.shape[0]
+    Y = np.zeros((N, K))
+    Y[np.arange(N), y] = 1
+    return Y
+
+def compute_loss_and_gradient(X, y, B, K):
+    N = X.shape[0]
+    
+    # Forward pass
+    Z = X@B                   # shape: (N, K-1)
+    Z_full = np.hstack([Z, np.zeros((N, 1))])  # shape: (N, K)
+    probs = softmax(Z_full)      # shape: (N, K)
+
+    # Compute loss
+    correct_log_probs = -np.log(probs[np.arange(N), y] + 1e-9)
+    loss = np.mean(correct_log_probs)
+
+    # One-hot true labels
+    Y = one_hot(y, K)
+
+    # Gradient: only for first K-1 columns
+    grad = -(X.T @ (Y[:, :K-1] - probs[:, :K-1])) / N  # shape: (P+1, K-1)
+
+    return loss, grad
+
+def train(X, y, K, lr=0.1, epochs=10000):
+    N, P_plus1 = X.shape  # assume X already includes bias column
+    B = np.zeros((P_plus1, K - 1))  # initialize weights
+
+    for epoch in range(epochs):
+        loss, grad = compute_loss_and_gradient(X, y, B, K)
+        B -= lr * grad  # gradient descent update
+
+        #if epoch % 100 == 0:
+            #print(f"Epoch {epoch}: Loss = {loss:.4f}")
+
+    return B
+
+def predict(X, B):
+    Z = X@B
+    Z_full = np.hstack([Z, np.zeros((Z.shape[0], 1))])
+    probs = softmax(Z_full)
+    return np.argmax(probs, axis=1)
 
 if __name__ == "__main__":
     default=pd.read_csv("../datasets/Default.csv")
@@ -41,3 +92,27 @@ if __name__ == "__main__":
     print("----------------------------------------")
     print("beta from sklearn:",lr.coef_.ravel())
     print("----------------------------------------")
+
+    #Multinomial Logistic Regression
+    carseats=pd.read_csv("../datasets/Carseats.csv")
+
+    K=3
+    X=carseats.drop(['ShelveLoc','Urban','US'],axis=1).values
+    y=carseats['ShelveLoc'].astype('category').cat.codes.values #0:Bad 1:Good 3:Medium
+    X = (X - X.mean(axis=0)) / X.std(axis=0)
+    X = np.hstack([np.ones((X.shape[0], 1)), X])
+    B=np.zeros((X.shape[1],K-1))  # one beta per feature, including intercept
+
+    B=train(X,y,K)
+
+    print("----------------------------------------")
+    print("Accuracy of MLR from scratch:",accuracy_score(y,predict(X,B)))
+
+    mlr= LogisticRegression(multi_class='multinomial')
+    mlr.fit(X,y)
+
+    print("----------------------------------------")
+    print("Accuracy of MLR with sklearn:",accuracy_score(y,mlr.predict(X)))
+    print("----------------------------------------")
+
+
